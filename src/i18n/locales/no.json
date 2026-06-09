@@ -447,5 +447,35 @@
     "versionNotFound": "Versjonen ble ikke funnet.",
     "moduleNotFound": "Modulen ble ikke funnet.",
     "title": "Feil"
+  },
+  "dbHealth": {
+    "title": "Databasestatus",
+    "subtitle": "Skrivebeskyttet healthcheck — utfører ingen skrivinger.",
+    "adminOnly": "Denne siden er kun for SuperAdmin eller Builder admin.",
+    "refresh": "Oppdater",
+    "checkedAt": "Sist sjekket",
+    "mode": {
+      "label": "Lagringsmodus",
+      "mock": "Mock (i minne)",
+      "real": "Ekte DB (MySQL)"
+    },
+    "connection": {
+      "label": "Tilkobling",
+      "notConfigured": "Ingen DATABASE_URL satt — kjører i mock-modus.",
+      "ok": "Tilkobling OK (SELECT 1 OK)",
+      "failed": "Tilkoblingsfeil"
+    },
+    "notes": {
+      "title": "Notater",
+      "readOnly": "Healthchecken kjører kun SELECT 1; ingen skjema- eller dataendringer.",
+      "failFast": "Hvis STORE_MODE=real og DATABASE_URL er tom, feiler appen umiddelbart — ingen stille mock-fallback.",
+      "rollback": "Rull tilbake til mock: sett STORE_MODE=mock i cPanel env + Restart Application."
+    }
+  },
+  "nav": {
+    "adminDbHealth": "Databasestatus",
+    "admin": "Administrasjon"
   }
+}
+
 }

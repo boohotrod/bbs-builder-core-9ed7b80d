@@ -447,5 +447,35 @@
     "versionNotFound": "Version not found.",
     "moduleNotFound": "Module not found.",
     "title": "Error"
+  },
+  "dbHealth": {
+    "title": "Database status",
+    "subtitle": "Read-only healthcheck — performs no writes.",
+    "adminOnly": "This page is restricted to SuperAdmin or Builder admin users.",
+    "refresh": "Refresh",
+    "checkedAt": "Last checked",
+    "mode": {
+      "label": "Store mode",
+      "mock": "Mock (in-memory)",
+      "real": "Real DB (MySQL)"
+    },
+    "connection": {
+      "label": "Connection",
+      "notConfigured": "No DATABASE_URL configured — running in mock mode.",
+      "ok": "Connection alive (SELECT 1 OK)",
+      "failed": "Connection error"
+    },
+    "notes": {
+      "title": "Notes",
+      "readOnly": "The healthcheck only runs SELECT 1; no schema or data changes.",
+      "failFast": "If STORE_MODE=real and DATABASE_URL is empty, the app fails fast — no silent mock fallback.",
+      "rollback": "Rollback to mock: set STORE_MODE=mock in cPanel env + Restart Application."
+    }
+  },
+  "nav": {
+    "adminDbHealth": "Database status",
+    "admin": "Administration"
   }
+}
+
 }
