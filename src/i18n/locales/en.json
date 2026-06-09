@@ -473,11 +473,5 @@
       "failFast": "If STORE_MODE=real and DATABASE_URL is empty, the app fails fast — no silent mock fallback.",
       "rollback": "Rollback to mock: set STORE_MODE=mock in cPanel env + Restart Application."
     }
-  },
-  "nav": {
-    "adminDbHealth": "Database status",
-    "admin": "Administration"
   }
-}
-
 }

@@ -473,11 +473,5 @@
       "failFast": "Hvis STORE_MODE=real og DATABASE_URL er tom, feiler appen umiddelbart — ingen stille mock-fallback.",
       "rollback": "Rull tilbake til mock: sett STORE_MODE=mock i cPanel env + Restart Application."
     }
-  },
-  "nav": {
-    "adminDbHealth": "Databasestatus",
-    "admin": "Administrasjon"
   }
-}
-
 }
