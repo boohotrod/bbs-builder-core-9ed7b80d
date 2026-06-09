@@ -25,7 +25,9 @@
     "media": "Média",
     "garage": "Garázs",
     "logout": "Kilépés",
-    "login": "Bejelentkezés"
+    "login": "Bejelentkezés",
+    "admin": "Adminisztráció",
+    "adminDbHealth": "Adatbázis állapot"
   },
   "common": {
     "search": "Keresés",
@@ -447,5 +449,29 @@
     "versionNotFound": "A verzió nem található.",
     "moduleNotFound": "A modul nem található.",
     "title": "Hiba"
+  },
+  "dbHealth": {
+    "title": "Adatbázis állapot",
+    "subtitle": "Csak olvasó healthcheck — semmilyen írási műveletet nem végez.",
+    "adminOnly": "Ez az oldal csak SuperAdmin vagy Builder admin számára érhető el.",
+    "refresh": "Frissítés",
+    "checkedAt": "Utolsó ellenőrzés",
+    "mode": {
+      "label": "Tárolási mód",
+      "mock": "Mock (memóriában)",
+      "real": "Valódi DB (MySQL)"
+    },
+    "connection": {
+      "label": "Kapcsolat",
+      "notConfigured": "Nincs DATABASE_URL beállítva — mock módban fut.",
+      "ok": "Kapcsolat él (SELECT 1 OK)",
+      "failed": "Kapcsolódási hiba"
+    },
+    "notes": {
+      "title": "Megjegyzések",
+      "readOnly": "A healthcheck kizárólag SELECT 1-et futtat, séma- vagy adatváltoztatás nincs.",
+      "failFast": "Ha STORE_MODE=real de DATABASE_URL üres, az app indításkor hibát dob — nincs csendes mock fallback.",
+      "rollback": "Visszaállás mockra: cPanel env-ben STORE_MODE=mock + Restart Application."
+    }
   }
 }

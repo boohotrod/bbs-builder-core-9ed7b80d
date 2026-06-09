@@ -2,9 +2,12 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, ShieldCheck, KeySquare, Brain, FileText, Boxes,
   History, Library, Network, BrainCircuit, GitGraph, User, LifeBuoy, Plane,
-  Image, Wrench, Database,
+  Image, Wrench, Database, HeartPulse,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+
+import { currentUser } from "@/lib/mock-store";
+
 
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -45,6 +48,13 @@ export function BuilderSidebar() {
     { url: "/stubs/garage", icon: Wrench, key: "nav.garage" },
   ];
 
+  const viewer = currentUser();
+  const isAdmin = Boolean(viewer?.isGlobalSuperadmin || viewer?.roles?.includes("builder_admin"));
+  const admin = isAdmin
+    ? [{ url: "/admin/db-health", icon: HeartPulse, key: "nav.adminDbHealth" }]
+    : [];
+
+
   const Group = ({ label, items }: { label: string; items: typeof main }) => (
     <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -79,6 +89,7 @@ export function BuilderSidebar() {
         <Group label={t("nav.registry")} items={registry} />
         <Group label={t("nav.profile")} items={personal} />
         <Group label={t("nav.stubs")} items={stubs} />
+        {admin.length > 0 && <Group label={t("nav.admin")} items={admin} />}
       </SidebarContent>
     </Sidebar>
   );

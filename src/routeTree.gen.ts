@@ -29,6 +29,7 @@ import { Route as RegistryKnowledgeRouteImport } from './routes/registry.knowled
 import { Route as RegistryFederationRouteImport } from './routes/registry.federation'
 import { Route as RegistryAiRouteImport } from './routes/registry.ai'
 import { Route as ModulesModuleKeyRouteImport } from './routes/modules.$moduleKey'
+import { Route as AdminDbHealthRouteImport } from './routes/admin.db-health'
 import { Route as RegistryFieldsIndexRouteImport } from './routes/registry.fields.index'
 import { Route as RegistryFieldsNewRouteImport } from './routes/registry.fields.new'
 import { Route as RegistryFieldsLifecycleRouteImport } from './routes/registry.fields.lifecycle'
@@ -137,6 +138,11 @@ const ModulesModuleKeyRoute = ModulesModuleKeyRouteImport.update({
   path: '/$moduleKey',
   getParentRoute: () => ModulesRoute,
 } as any)
+const AdminDbHealthRoute = AdminDbHealthRouteImport.update({
+  id: '/admin/db-health',
+  path: '/admin/db-health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegistryFieldsIndexRoute = RegistryFieldsIndexRouteImport.update({
   id: '/registry/fields/',
   path: '/registry/fields/',
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
+  '/admin/db-health': typeof AdminDbHealthRoute
   '/modules/$moduleKey': typeof ModulesModuleKeyRouteWithChildren
   '/registry/ai': typeof RegistryAiRoute
   '/registry/federation': typeof RegistryFederationRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
+  '/admin/db-health': typeof AdminDbHealthRoute
   '/modules/$moduleKey': typeof ModulesModuleKeyRouteWithChildren
   '/registry/ai': typeof RegistryAiRoute
   '/registry/federation': typeof RegistryFederationRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/roles': typeof RolesRoute
   '/users': typeof UsersRoute
+  '/admin/db-health': typeof AdminDbHealthRoute
   '/modules/$moduleKey': typeof ModulesModuleKeyRouteWithChildren
   '/registry/ai': typeof RegistryAiRoute
   '/registry/federation': typeof RegistryFederationRoute
@@ -276,6 +285,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/roles'
     | '/users'
+    | '/admin/db-health'
     | '/modules/$moduleKey'
     | '/registry/ai'
     | '/registry/federation'
@@ -305,6 +315,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/roles'
     | '/users'
+    | '/admin/db-health'
     | '/modules/$moduleKey'
     | '/registry/ai'
     | '/registry/federation'
@@ -334,6 +345,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/roles'
     | '/users'
+    | '/admin/db-health'
     | '/modules/$moduleKey'
     | '/registry/ai'
     | '/registry/federation'
@@ -364,6 +376,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   RolesRoute: typeof RolesRoute
   UsersRoute: typeof UsersRoute
+  AdminDbHealthRoute: typeof AdminDbHealthRoute
   RegistryAiRoute: typeof RegistryAiRoute
   RegistryFederationRoute: typeof RegistryFederationRoute
   RegistryKnowledgeRoute: typeof RegistryKnowledgeRoute
@@ -521,6 +534,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModulesModuleKeyRouteImport
       parentRoute: typeof ModulesRoute
     }
+    '/admin/db-health': {
+      id: '/admin/db-health'
+      path: '/admin/db-health'
+      fullPath: '/admin/db-health'
+      preLoaderRoute: typeof AdminDbHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/registry/fields/': {
       id: '/registry/fields/'
       path: '/registry/fields'
@@ -622,6 +642,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   RolesRoute: RolesRoute,
   UsersRoute: UsersRoute,
+  AdminDbHealthRoute: AdminDbHealthRoute,
   RegistryAiRoute: RegistryAiRoute,
   RegistryFederationRoute: RegistryFederationRoute,
   RegistryKnowledgeRoute: RegistryKnowledgeRoute,
