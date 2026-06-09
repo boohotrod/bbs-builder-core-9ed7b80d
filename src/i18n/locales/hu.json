@@ -25,7 +25,9 @@
     "media": "Média",
     "garage": "Garázs",
     "logout": "Kilépés",
-    "login": "Bejelentkezés"
+    "login": "Bejelentkezés",
+    "admin": "Adminisztráció",
+    "adminDbHealth": "Adatbázis állapot"
   },
   "common": {
     "search": "Keresés",

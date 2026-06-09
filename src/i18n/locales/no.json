@@ -25,7 +25,9 @@
     "media": "Media",
     "garage": "Garasje",
     "logout": "Logg ut",
-    "login": "Logg inn"
+    "login": "Logg inn",
+    "admin": "Administrasjon",
+    "adminDbHealth": "Databasestatus"
   },
   "common": {
     "search": "Søk",
