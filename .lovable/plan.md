@@ -1,254 +1,109 @@
-# B-2.2 — Dynamic Field Registry (DFR) — Terv
 
-A Dynamic Field Registry a BBS központi metaadat-rendszere. A mező nem oszlop, hanem **önálló, verziózott, auditált, fordítható, jogosultságkezelt, taxonomy-hoz kapcsolható objektum**. Az adatok EAV modellben tárolódnak, de indexelhető és skálázható módon.
+# B-3 — Valódi MySQL bekötés (előkészítés)
 
----
-
-## 1. Alapelvek (rögzítve)
-
-- A **mező = objektum**, nem oszlop.
-- **Életciklus**: `active → hidden → disabled → deprecated → archived`
-- Használt mező **fizikailag nem törölhető** (csak archived).
-- Minden mező: **verziózott, auditált, fordítható, jogosultságkezelt, taxonomy-hoz köthető**.
-- A **Universal Profile Engine** elsődleges fogyasztó; később: Vehicle, Club, Event, Business, Workshop, Shop, Artist, Performer.
-- EAV maradjon **indexelhető és skálázható** (típusos value oszlopok + részleges indexek + materialized projection opció).
+Cél: a Builder Core v0.2 mock-store módban fut tovább, de a kódbázis és a cPanel környezet készen áll arra, hogy egyetlen kapcsolóval, jóváhagyásod után, kontrollált módon átálljunk valódi MySQL adatbázisra. Egyetlen lépés sem ír éles DB-be jóváhagyás nélkül, és minden lépés visszafordítható.
 
 ---
 
-## 2. Adatmodell – Táblák
+## B-3.1 — Drizzle migrációk generálása (lokál, repo commit)
 
-A DFR 9 új tábla + 2 enum a `public` sémában (mock-store-ban tükrözve). Minden tábla `tenant_key`-jel scope-olt és audit-kompatibilis.
+- Cél: a `src/db/schema/**` Drizzle séma alapján reprodukálható SQL migrációs fájlok keletkezzenek a `drizzle/` mappában, és bekerüljenek a GitHub repóba.
+- Lépések:
+  1. `drizzle.config.ts` ellenőrzése — már `dialect: "mysql"`, output `./drizzle`, OK.
+  2. Lokálisan (NEM a szerveren) futtatás: `bunx drizzle-kit generate` — ez csak SQL fájlokat ír, DB-hez **nem nyúl**.
+  3. A generált `drizzle/0000_*.sql` fájl review-ja: kompatibilis-e cPanel MySQL 8.x-szel (utf8mb4, InnoDB, nincs PG-specifikus szintaxis).
+  4. Commit + push a GitHubra. Szerveren csak `git pull`, futtatás NINCS.
+- Eredmény: a migrációs SQL verziókövetett, de **nem fut le** sehol.
 
-### 2.1 Enums
+## B-3.2 — DB connection healthcheck oldal
 
-- `field_status`: `active | hidden | disabled | deprecated | archived`
-- `field_data_type`: `string | text | integer | decimal | boolean | date | datetime | enum | reference | json | media | geo`
+- Cél: új admin-only oldal (`/admin/db-health`) ami megmondja:
+  - aktív-e a `DATABASE_URL`,
+  - sikerült-e a `SELECT 1`,
+  - melyik módban fut az app (`mock` / `real`),
+  - hány migráció van a `drizzle/` mappában vs. mit lát a DB `__drizzle_migrations` táblája.
+- Implementáció:
+  - `src/lib/api/db-health.functions.ts` — `createServerFn` + `requireSupabaseAuth`-helyett a meglévő admin guard. **Csak olvas**, `SELECT 1`, semmi DDL.
+  - `src/routes/admin.db-health.tsx` — magyar UI: „Adatbázis állapot", „Kapcsolat", „Mód", „Migrációk".
+  - Csak SuperAdmin láthatja.
+- Eredmény: bármikor látható, hogy a DB kapcsolat él-e, **anélkül** hogy bármit írna.
 
-### 2.2 Központi táblák
+## B-3.3 — Mock-store / real-db kapcsoló
 
-**`field_definitions`** — A mező mint objektum (a "fej").
-- `id` (uuid, pk)
-- `tenant_key` (text, idx)
-- `key` (text) — gépi azonosító, pl. `vehicle.engine.displacement_cc`
-- `namespace` (text) — pl. `vehicle`, `club`, `profile.core`
-- `owner_module` (text) — melyik BBS modul birtokolja
-- `data_type` (`field_data_type`)
-- `is_multivalue` (bool)
-- `is_required_default` (bool)
-- `status` (`field_status`, default `active`)
-- `current_version_id` (uuid, fk → `field_versions.id`)
-- `created_at`, `updated_at`, `archived_at`
-- UNIQUE (`tenant_key`, `namespace`, `key`)
+- Cél: egyetlen, jól látható kapcsoló dönti el, hogy az app a meglévő `src/lib/mock-store.ts`-t használja vagy a Drizzle DB-t.
+- Implementáció:
+  - Új env: `STORE_MODE=mock|real` (default: `mock`). Bekerül `.env.example`-be és `src/lib/server/env.ts` Zod sémájába.
+  - Új modul: `src/lib/server/store/index.ts` — `getStore()` ami `STORE_MODE` és `DATABASE_URL` jelenléte alapján vagy a `mock-store`-t, vagy a Drizzle adaptert adja vissza.
+  - Real adapter (`src/lib/server/store/db-store.ts`) **csak interfész + stub** ebben a körben. Tényleges query implementáció B-3.4-ben jön, csak a `users` táblához.
+  - Safety: ha `STORE_MODE=real` de `DATABASE_URL` üres → fail-fast hibaüzenet, automatikus fallback **NINCS** (nehogy észrevétlenül mock-ot használjunk élesben).
+- Eredmény: a teljes app mock módban marad, amíg az env-ben explicit át nem kapcsoljuk.
 
-**`field_versions`** — Verziózás (a "test"). Minden szerkesztés új verzió.
-- `id` (uuid, pk)
-- `field_id` (fk → field_definitions)
-- `version_no` (int, monoton)
-- `schema` (jsonb) — validáció, min/max, regex, enum-tagok, reference target, UI hints
-- `default_value` (jsonb, null)
-- `change_reason` (text)
-- `created_by`, `created_at`
-- `is_current` (bool, részleges unique idx field_id + is_current=true)
+## B-3.4 — `users` + `profiles` első valódi táblák
 
-**`field_translations`** — Minden mező fordítható (label, help, placeholder, enum-tagok).
-- `id`, `field_version_id` (fk), `locale` (text), `label`, `help`, `placeholder`, `enum_labels` (jsonb)
-- UNIQUE (`field_version_id`, `locale`)
-- B-1 dummy-formátum továbbra is működik: hiányzó fordítás esetén `[locale] key`.
+- Cél: a két legkisebb, legjobban körülhatárolt tábla a `db-store` adapteren keresztül valódi DB-ből olvasson — **de csak akkor**, ha `STORE_MODE=real`.
+- Hatókör:
+  - `users` (már létezik: `src/db/schema/identity/users.ts`).
+  - `profiles` (már létezik: `src/db/schema/identity/profiles.ts`).
+  - Csak READ operációk az első körben (lista + detail). WRITE (CREATE/UPDATE/DELETE) a B-3 lezárása után, külön körben.
+- Egyéb modulok (roles, permissions, modules, registry, audit, decisions, memory) **maradnak mockban** — őket B-4+ kapcsolja át.
+- Eredmény: ellenőrizhetjük a valódi DB-t egy biztonságos, kis felületen, mielőtt bármit átírnánk.
 
-**`field_taxonomy_bindings`** — Mező ↔ taxonomy node.
-- `id`, `field_id`, `taxonomy_node_id` (fk a meglévő taxonomy-hoz), `binding_kind` (`scope | filter | classifier`), `created_at`
-- UNIQUE (`field_id`, `taxonomy_node_id`, `binding_kind`)
+## B-3.5 — SuperAdmin seed CLI véglegesítése
 
-**`field_permissions`** — Jogosultságok mezőszinten (read/write/admin).
-- `id`, `field_id`, `subject_kind` (`role | group | user | federation_peer`), `subject_id` (text), `permission` (`read | write | admin`), `effect` (`allow | deny`), `tenant_key`
-- UNIQUE (`field_id`, `subject_kind`, `subject_id`, `permission`)
-- Kiértékelés: `deny > allow`, hiányzó szabály = nem látható.
+- Cél: a meglévő `scripts/seed-superadmin.mjs` stub helyett valódi, idempotens seed:
+  - Csatlakozik `DATABASE_URL`-en.
+  - Ellenőrzi, hogy van-e már `is_global_superadmin = true` user → ha igen, **megtagadja** és kilép (no double-seed).
+  - Argon2id jelszó hash (`@node-rs/argon2`, már bundling-safe Node 22-n).
+  - Beszúr 1 sort a `users` táblába `is_invisible = true`-val.
+  - Interaktív promptok **magyarul**: „SuperAdmin felhasználónév", „E-mail", „Jelszó (min. 12 karakter)".
+- Futtatás kizárólag manuálisan, SSH-ból, B-3.1 migráció lefutása után. **Most NEM futtatjuk.**
+- Eredmény: van egy biztonságos, egyszer-futtatható módja a kezdeti admin létrehozásnak.
 
-### 2.3 Entitás-kapcsolódás (profil-agnosztikus)
+## B-3.6 — Rollback terv
 
-**`field_entity_bindings`** — Melyik entitástípuson jelenhet meg a mező.
-- `id`, `field_id`, `entity_type` (text: `profile.user | profile.vehicle | profile.club | profile.event | profile.business | profile.workshop | profile.shop | profile.artist | profile.performer | ...`), `is_required` (bool override), `display_order` (int), `group_key` (text, UI csoport)
-- UNIQUE (`field_id`, `entity_type`)
+Minden lépés visszafordítható. Ha bármi gond van a real DB-vel, a workflow:
 
-### 2.4 EAV érték-tárolás (indexelhető)
-
-**`field_values`** — A tényleges adat. Típusos oszlopok + részleges indexek.
-- `id` (uuid)
-- `tenant_key` (text, idx)
-- `entity_type` (text), `entity_id` (uuid) — kompozit logikai FK
-- `field_id` (fk), `field_version_id` (fk) — milyen verzió szerint íródott
-- `value_string` (text, null)
-- `value_number` (numeric, null)
-- `value_bool` (bool, null)
-- `value_datetime` (timestamptz, null)
-- `value_json` (jsonb, null) — komplex/multivalue/reference esetén
-- `created_at`, `updated_at`, `created_by`
-- INDEX-ek:
-  - `(tenant_key, entity_type, entity_id)` — entitás-olvasás
-  - `(field_id, value_string)` WHERE value_string IS NOT NULL — equality search
-  - `(field_id, value_number)` WHERE value_number IS NOT NULL
-  - `(field_id, value_datetime)` WHERE value_datetime IS NOT NULL
-  - GIN `(value_json jsonb_path_ops)` WHERE value_json IS NOT NULL
-- UNIQUE (`tenant_key`, `entity_type`, `entity_id`, `field_id`) ha `is_multivalue=false`
-
-**`field_value_history`** — Érték-szintű audit + visszaállítás.
-- `id`, `value_id`, `previous_snapshot` (jsonb), `changed_by`, `changed_at`, `change_reason`, `audit_event_id` (fk → audit_events)
-
-### 2.5 Audit kapcsolat
-
-- Minden DFR művelet (create/update/status-change/archive/permission-change/translation-change/value-write) **`audit_events`-be ír** a B-2.1-ben bevezetett `tenant_key` és hash-chain (v2) szerint.
-- `audit_events.target_type` értékek: `field_definition`, `field_version`, `field_translation`, `field_permission`, `field_value`.
+1. cPanel → Setup Node.js App → Environment variables → `STORE_MODE=mock`, `DATABASE_URL` törlése.
+2. Restart Application. Az app azonnal visszaáll a mock-store-ra, kód deploy nem kell.
+3. Ha a DB séma is rontott: a `drizzle/0000_*.sql` mellé `drizzle/rollback/0000_down.sql` (manuálisan írt `DROP TABLE` lista, fordított dependency sorrendben). SSH-ból futtatható, de **csak teszt DB-n**.
+4. DB szintű backup: cPanel → MySQL → phpMyAdmin → Export (full SQL dump) **mielőtt** bármilyen migrációt futtatnánk élesen. Ez a leggyorsabb visszaállás.
+5. Audit chain védelem (B-3.1 utáni teendő, már dokumentálva `DEPLOY_CPANEL.md` 7. pontban): `REVOKE UPDATE, DELETE ON audit_events` — csak az első sikeres deploy után.
 
 ---
 
-## 3. Kapcsolatok (ER diagram – ASCII)
+## Mellékelt dokumentáció-frissítések
 
-```text
-                       field_definitions
-                              │ 1
-              ┌───────────────┼───────────────┬──────────────┬────────────────┐
-              │ N             │ N             │ N            │ N              │ N
-       field_versions  field_entity_b.  field_taxonomy_b.  field_permissions  field_values
-              │ 1
-              │ N
-       field_translations
+- `.env.example`:
+  - új `STORE_MODE=mock` sor + magyarázat,
+  - `DATABASE_URL` melletti komment: „B-3.4 aktiváláshoz kötelező, addig hagyd üresen".
+- `docs/DEPLOY_CPANEL.md`:
+  - új „11. B-3 aktiválás lépcsőzetesen" szekció: az 5 fenti lépés sorrendje, mikor kell `git pull` / build / restart, mikor NEM.
+  - rollback eljárás 3 paranccsal.
+- `docs/architecture/b-3-database-activation.md` (új): a teljes B-3 terv archiválva, hivatkozik a fenti lépcsőkre.
 
-       field_values ─1─N─ field_value_history ─1─1─ audit_events
-       field_definitions.current_version_id ──► field_versions.id
-       field_taxonomy_bindings ──► taxonomy_nodes (B-1 meglévő)
-       field_permissions.subject_id ──► users / roles / federation_peers (B-2.1)
-       field_values.(entity_type, entity_id) ──► Universal Profile Engine entitások
-```
+## Mit NEM teszünk ebben a körben
 
----
+- ❌ Valódi DB-be írás (sem seed, sem migráció futtatás).
+- ❌ Jelszó/secret bekérés chatben.
+- ❌ Új business modul vagy UI feature.
+- ❌ Roles/permissions/audit/registry átírása real DB-re — azok B-4+.
+- ❌ Automatikus fallback mock-ra, ha real DB hibázik — ez szándékos fail-fast.
 
-## 4. Mező-életciklus
+## Mit fogsz Te csinálni jóváhagyás után
 
-```text
-   ┌─────────┐  hide      ┌────────┐  disable   ┌──────────┐
-   │ active  │──────────► │ hidden │──────────► │ disabled │
-   └────┬────┘            └───┬────┘            └────┬─────┘
-        │ deprecate            │ deprecate            │ deprecate
-        ▼                      ▼                      ▼
-                       ┌──────────────┐  archive   ┌──────────┐
-                       │  deprecated  │──────────► │ archived │
-                       └──────────────┘            └──────────┘
-```
+1. Approve a tervet.
+2. Lokálisan: `bunx drizzle-kit generate` → commit/push.
+3. cPanel teszt DB létrehozása (külön DB user, `ALL PRIVILEGES`).
+4. SSH-ból manuálisan: `mysql ... < drizzle/0000_*.sql`.
+5. cPanel env: `DATABASE_URL=...`, `STORE_MODE=mock` (még!).
+6. Restart → `/admin/db-health` ellenőrzés (mock módban is mutatja a kapcsolatot).
+7. Csak ha minden zöld → `STORE_MODE=real` → Restart → users/profiles olvasás teszt.
+8. Ha bármi gond → B-3.6 rollback, 30 másodperc alatt.
 
-Szabályok:
-- `active` → új íráshoz és olvasáshoz használható.
-- `hidden` → UI-on rejtett, API-n olvasható, írható.
-- `disabled` → olvasható (történeti), **új írás tiltott**.
-- `deprecated` → olvasható, írás csak migrációs jogosultsággal.
-- `archived` → csak audit/visszaállító nézetben látható, **soha nem törölhető fizikailag** ha létezik bármilyen `field_values` rekord.
-- Visszafelé átmenet csak `admin` szerepkörrel és `change_reason` kötelező.
+## Hatókör (file-szinten, becslés)
 
----
+- Új fájlok: `src/lib/server/store/index.ts`, `src/lib/server/store/mock-store.ts` (wrap), `src/lib/server/store/db-store.ts`, `src/lib/api/db-health.functions.ts`, `src/routes/admin.db-health.tsx`, `docs/architecture/b-3-database-activation.md`.
+- Módosított: `src/lib/server/env.ts` (+ `STORE_MODE`), `.env.example`, `docs/DEPLOY_CPANEL.md`, `scripts/seed-superadmin.mjs`, `src/i18n/locales/{hu,en,no}.json` (új kulcsok az új oldalhoz, **magyar default**).
+- Schema: változatlan (már létezik).
+- Migráció futtatás: **0 db** ebben a körben.
 
-## 5. Jogosultsági modell
-
-Három szint, AND kapcsolatban kiértékelve:
-
-1. **Modul-szint** (`owner_module` + RBAC role: `field.admin`, `field.editor`, `field.viewer`).
-2. **Mező-szint** (`field_permissions` – per role/group/user/federation_peer).
-3. **Entitás-szint** (a profil saját jogosultsága – Universal Profile Engine adja).
-
-Műveletek:
-- `read` — látszik a UI-on, kiolvasható API-n.
-- `write` — érték írható (a mező státusza is engedi-e).
-- `admin` — definíciót, verziót, fordítást, jogot módosíthat, státuszt léptethet.
-
-Federation: `subject_kind=federation_peer` lehetővé teszi peer-szintű read-only kiosztást a B-2.1 `federation_users` mentén.
-
----
-
-## 6. Taxonomy kapcsolat
-
-- A taxonomy node-okhoz **3 kötési mód**: `scope` (csak ezen ág entitásain jelenik meg), `filter` (UI/API szűrőkulcs), `classifier` (a mező értéke maga osztályoz egy taxonomy node-ba).
-- A bindings tábla N-N, mező több taxonomy ághoz is köthető (pl. `vehicle.engine.displacement_cc` → `vehicle/cars`, `vehicle/motorcycles`).
-
----
-
-## 7. Translation kapcsolat
-
-- A fordítás a **verzióhoz** kötődik, nem a definícióhoz → a régi verzió fordítása megőrződik.
-- Új verzió létrehozásakor a fordítások öröklődnek (copy-on-write); szerkesztéskor új sor.
-- Dummy fallback: `[locale] field.key` (B-1 + B-2 döntés #4).
-- Locale-ok forrása: meglévő i18n locales (`en`, `hu`, `no`).
-
----
-
-## 8. Versioning kapcsolat
-
-- Minden szerkesztés `field_versions` új sora (`version_no++`).
-- `current_version_id` a `field_definitions`-en mutat az aktívra.
-- Régi verziók megmaradnak — `field_values.field_version_id` mutatja, melyik szerint íródott az érték.
-- Migráció: új verzió bevezetése nem írja át a régi értékeket; külön "revalidate" job futtatható később (B-3 hatókör).
-
----
-
-## 9. Audit kapcsolat
-
-- Minden DFR művelet `audit_events` (v2, `tenant_key` + hash-chain).
-- `field_value_history.audit_event_id` ↔ `audit_events.id` 1:1.
-- Archiválás és státuszváltás kötelezően `change_reason`-nel.
-- Federation-eredetű módosítás `actor_id`-ja az importáló rendszerhez (B-2.1 `federation_users.source_system_id`) kötődik.
-
----
-
-## 10. UI képernyők
-
-Új route-ok a meglévő `/registry/*` minta szerint:
-
-1. **`/registry/fields`** — Field lista
-   - Szűrők: `namespace`, `owner_module`, `status`, `entity_type`, `tenant_key`, taxonomy node.
-   - Oszlopok: key, label (aktuális locale), data_type, status, version_no, használati szám (value-count).
-2. **`/registry/fields/:fieldId`** — Field részletek
-   - Tabok: **Overview**, **Versions**, **Translations**, **Permissions**, **Taxonomy**, **Entities**, **Audit**.
-3. **`/registry/fields/new`** — Új mező varázsló
-   - Lépések: alap (key, namespace, data_type) → schema (validáció) → entitások → taxonomy → fordítások → jogosultságok → összegzés.
-4. **`/registry/fields/:fieldId/versions/:versionNo`** — Verzió diff nézet (schema + translations).
-5. **`/registry/fields/:fieldId/values`** — EAV inspector (read-only, debug/admin).
-6. **`/registry/fields/lifecycle`** — Életciklus dashboard (státusz-eloszlás, deprecated/archived műveletek, `change_reason` követelmény).
-
-A **Universal Profile Engine** képernyői a mezőket olvassák a registry-ből; a DFR UI csak metaadat-kezelés.
-
----
-
-## 11. Migrációs stratégia
-
-- Új migrációk a meglévő számozási rendben:
-  - `0004_field_enums.sql` (enumok)
-  - `0005_field_definitions_and_versions.sql`
-  - `0006_field_translations.sql`
-  - `0007_field_taxonomy_bindings.sql`
-  - `0008_field_permissions.sql`
-  - `0009_field_entity_bindings.sql`
-  - `0010_field_values.sql` (+ részleges indexek + GIN)
-  - `0011_field_value_history.sql`
-- Minden tábla után **explicit GRANT** (`authenticated`, `service_role`; `anon` nem kap), RLS engedélyezés és policy-k `has_role(...)` mintával.
-- Mock-store előbb (B-2.2 implementáció), valódi migráció futtatása **B-3** hatókörben (a 4 B-2 döntés szerint).
-- B-2.1-kompatibilis: minden insert `tenant_key`-t kap, minden audit hash-chain v2-be írja a változást.
-
----
-
-## 12. Kockázatok és nyitott pontok (jóváhagyásra)
-
-1. **Reference data_type célja** — engedjük-e cross-entity referenciát már most? (Javaslat: igen, `schema.reference.entity_type` mezővel.)
-2. **Materialized projection** entitásonként (cache tábla, pl. `profile_vehicle_flat`) — most csak előkészítés, tényleges generálás B-3.
-3. **Multivalue rendezés** — kell-e explicit `position` oszlop `field_values`-ben? (Javaslat: igen, opcionális `position int`.)
-4. **Permission cache** — futásidőben memo a UI-ban; invalidáció audit-eseményre.
-
----
-
-## 13. B-2.2 leszállítandó (jóváhagyás után)
-
-- 9 séma-fájl `src/db/schema/registry/fields/` alatt.
-- Mock-store kiterjesztés (definíciók, verziók, fordítások, jogok, taxonomy bindings, entity bindings, values, history).
-- 6 új UI route a fenti listából.
-- i18n kulcsok (`en`, `hu`, `no`).
-- Dokumentáció: `docs/architecture/b-2.2-dynamic-field-registry.md`.
-- **Nem** indul: AI Translation Cache (B-2.4), BBS seed bővítés (B-2.3).
-- **Nem** fut: valódi DB migráció.
-
-Kérlek jelezd, ha a 12-es pont nyitott kérdéseire is kéred a döntést, vagy a tervet így jóváhagyod és indulhat a B-2.2 implementáció.
