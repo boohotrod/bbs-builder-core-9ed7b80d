@@ -47,9 +47,7 @@ export const getDbHealth = createServerFn({ method: "GET" }).handler(async (): P
       connectTimeout: 5_000,
     });
     try {
-      const [rows] = await conn.query<{ v: number; ver: string }[] & import("mysql2").RowDataPacket[]>(
-        "SELECT 1 AS v, VERSION() AS ver",
-      );
+      const [rows] = await conn.query("SELECT 1 AS v, VERSION() AS ver");
       const first = Array.isArray(rows) ? (rows[0] as { v?: number; ver?: string } | undefined) : undefined;
       return {
         mode,
