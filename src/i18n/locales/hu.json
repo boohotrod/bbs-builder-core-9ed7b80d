@@ -473,11 +473,5 @@
       "failFast": "Ha STORE_MODE=real de DATABASE_URL üres, az app indításkor hibát dob — nincs csendes mock fallback.",
       "rollback": "Visszaállás mockra: cPanel env-ben STORE_MODE=mock + Restart Application."
     }
-  },
-  "nav": {
-    "adminDbHealth": "Adatbázis állapot",
-    "admin": "Adminisztráció"
   }
-}
-
 }
