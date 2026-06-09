@@ -114,11 +114,11 @@ Live és test **külön cPanel Node.js App**-ban fut, külön DB-vel, külön en
 Részletes lépések: [`docs/DEPLOY_CPANEL.md`](docs/DEPLOY_CPANEL.md).
 
 Röviden:
-1. cPanel → **Setup Node.js App** → új app, Node >= 20.
+1. cPanel → **Setup Node.js App** → új app, Node >= 20 (test alatt Node 22 igazolt).
 2. Application root: a repo gyökere (git-pull / git clone után).
-3. Application startup file: `.output/server/index.mjs`.
+3. Application startup file: **`app.js`** (a repo gyökerében; ez importálja a build által generált `.output/server/index.mjs`-t). NE add meg közvetlenül a `.output/...` útvonalat — azt a build minden alkalommal újragenerálja, az `app.js` viszont stabil belépési pont.
 4. Environment Variables → másold a `.env.example` listát, valódi értékekkel.
-5. `bun install` → `bun run build` → app restart.
+5. `npm install --include=dev --legacy-peer-deps --package-lock=false` → `npm run build` → **Restart Application**.
 
 ---
 
