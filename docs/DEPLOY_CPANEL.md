@@ -205,3 +205,37 @@ npm run build
 - Ne kapcsold be a federation peer trafficot.
 
 Mindezek a **B-3 nyitásakor** kerülnek elő, külön jóváhagyással.
+
+## 11. B-3 aktiválás lépcsőzetesen (előkészítve, futtatás jóváhagyásra vár)
+
+Részletes terv: `docs/architecture/b-3-database-activation.md`.
+
+Új env változó (`.env.example`-ben is): `STORE_MODE=mock|real` (default `mock`).
+Ha `STORE_MODE=real` de `DATABASE_URL` üres → az app **indításkor hibázik**
+(szándékos fail-fast, nincs csendes mock fallback).
+
+### Aktiválási checklist (sorrend kötelező)
+
+1. Lokálisan: `bunx drizzle-kit generate` → `drizzle/` commit + push. **Csak SQL fájl, DB-hez nem nyúl.**
+2. cPanel → MySQL Databases → új DB + user (`ALL PRIVILEGES`).
+3. phpMyAdmin → Export → teljes backup mentve (B-3.6 rollback alapja).
+4. SSH-ból manuálisan: `mysql -u <user> -p <db> < drizzle/0000_*.sql`.
+5. cPanel env: `DATABASE_URL=mysql://...`, **`STORE_MODE=mock` MARAD**. Restart.
+6. `/admin/db-health` → `Connection alive`, MySQL verzió látszik. Még mock módban!
+7. `npm i @node-rs/argon2` (egyszeri, csak a seed CLI-hez).
+8. `node scripts/seed-superadmin.mjs` (interaktív, magyar promptok, idempotens).
+9. cPanel env: `STORE_MODE=real`. Restart Application.
+10. `/users` valódi DB-ből olvas. Ha minden zöld → `REVOKE UPDATE, DELETE ON audit_events`.
+
+### Rollback (< 60 másodperc)
+
+```
+cPanel → Setup Node.js App → Environment variables
+  STORE_MODE=mock
+  DATABASE_URL=              # töröld
+→ Restart Application
+```
+
+Kód deploy NEM kell. Az app azonnal visszaáll mock-store-ra.
+DB séma rontás esetén: phpMyAdmin → Import → 3. pontban mentett dump.
+
