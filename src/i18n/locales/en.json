@@ -25,7 +25,9 @@
     "media": "Media",
     "garage": "Garage",
     "logout": "Sign out",
-    "login": "Sign in"
+    "login": "Sign in",
+    "admin": "Administration",
+    "adminDbHealth": "Database status"
   },
   "common": {
     "search": "Search",
